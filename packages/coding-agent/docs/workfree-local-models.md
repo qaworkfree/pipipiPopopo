@@ -33,10 +33,10 @@ For Windows PowerShell, follow the
 [local Windows validation guide](workfree-local-models-windows.md), which keeps
 test model/configuration files outside the existing repositories.
 
-This procedure uses upstream source and a separately supplied GGUF. It has **not
-been validated with real GGUF inference in this cloud environment**: the model
-delivery CDN is blocked by the proxy with HTTP 403. Do not
-mark deployment complete until the checks below pass on the intended host.
+This procedure uses upstream source and a separately supplied GGUF. Real CPU
+inference, CLI responses and authenticated UI streaming now pass with the small
+model recorded below. That model did not call `read`, so tool compatibility and
+deployment on the intended host remain incomplete.
 
 1. Install a C++ toolchain and CMake according to the upstream
    [build guide](https://github.com/ggml-org/llama.cpp/blob/master/docs/build.md).
@@ -172,12 +172,13 @@ artifact from this fork, even if its version string matches.
 - The UI loaded this built fork through its existing SDK resolver. Actual
   HTTP/WebSocket/browser tests verified the selected package path/version,
   project policy, canonical escapes, denied uploads and blocked previews.
-- Real GGUF inference and model tool-call compatibility remain unverified; the
-  offline HTTP fixtures are not a substitute for an actual model.
+- Real CPU GGUF inference, CLI responses and authenticated UI/browser streaming
+  pass with the small model recorded below. Its read-tool test did not pass;
+  offline HTTP fixtures do not establish model tool-call compatibility.
 - The intended host, production model/quantization, GPU configuration and real
   Tailscale second-device validation are deployment inputs, not inferred here.
 
-## Cloud follow-up: 2026-10-06
+## Cloud follow-up before publication: 2026-10-06
 
 The Linux CPU `llama-server` target compiled successfully from upstream v0.5.0,
 commit `7fe450e19305b828c199d602c23a8337aaa1f03b`, with CMake 4.1.3 and GCC 14.2.
@@ -199,3 +200,58 @@ does not publish the environment or prove live access; publication is performed
 through the environment settings UI. Verify the expected checksum after a
 successful download, before loading the model. Local-machine validation is also
 possible using the same guide and private test configuration.
+
+## Real small-model validation after publication: 2026-10-06
+
+After the user published the environment, the actual GGUF download succeeded.
+The user requested the smallest practical test model; this run used a smaller
+135M instruction model instead of downloading the earlier 0.5B candidate.
+
+| Property                       | Verified value                                                                                      |
+| ------------------------------ | --------------------------------------------------------------------------------------------------- |
+| Model                          | SmolLM2-135M-Instruct, Q3_K_S                                                                       |
+| Source                         | [bartowski/SmolLM2-135M-Instruct-GGUF](https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF) |
+| Immutable revision             | `09816acd5d99df7be770d85ea30822623dab342c`                                                          |
+| File                           | `SmolLM2-135M-Instruct-Q3_K_S.gguf`                                                                 |
+| Size                           | 88,202,080 bytes (about 88 MB)                                                                      |
+| SHA-256                        | `7add77b8d3736d6b2fd21dc96e69be026f19bde843e9988b43cef1315fc5eebe`                                  |
+| License declared by model card | Apache-2.0                                                                                          |
+| Server                         | llama.cpp v0.5.0, commit `7fe450e19305b828c199d602c23a8337aaa1f03b`                                 |
+| Runtime                        | Built `pipipiPopopo` fork, SDK 1.0.2                                                                |
+
+Normal HTTPS verification and the expected immutable-source checksum were
+verified before loading. The server used CPU only, alias `workfree-local`,
+loopback port 8099, `--jinja --ctx-size 8192 --parallel 1 --n-gpu-layers 0
+--threads 4 --predict 256`. An isolated copy of the provider example used that
+port and `maxTokens: 256`; existing agent/UI configuration was preserved.
+
+Observed results:
+
+- The existing `check-local-model.mjs` passed `/health`, model discovery and real
+  bounded SSE inference through `[DONE]`.
+- The built CLI returned real model text and exited successfully with tools,
+  extensions, skills and prompt templates disabled for the greeting request.
+- With only `read` enabled, the CLI responded in text without executing that
+  tool. JSON events contained zero completed `read` calls and no probe marker in
+  a tool result. **The read-tool test did not pass**, despite CLI exit status 0.
+- The UI loaded the actual fork, rejected unauthenticated session access, logged
+  in through the auth API and received real WebSocket response deltas. Chromium
+  displayed the model response at a mobile viewport. Logout closed the socket
+  with code 4001 and the expired cookie received HTTP 401. The test explicitly
+  disabled other catalog/core tools in its disposable UI configuration.
+
+This validates the inference connection, not coding quality or tool compatibility.
+The remaining model check requires a model/template that actually emits a valid
+read call, with a successful tool result and the expected file marker. Follow the
+UI plan's pending audit of additional native SDK tools before enabling those
+tools in a policy-controlled deployment. GPU behavior, Windows execution,
+production hardware/model selection and second-device Tailscale access remain
+unverified.
+
+After publication, prepared repository dependencies survived but the earlier
+`/tmp` llama.cpp/CMake files did not. The replacement build and test model were
+prepared outside the repositories in the cloud's shared directory; reusable
+installation/startup instructions were updated in a configuration draft. Saving
+that update does not publish a new snapshot, and no fresh-task restoration of
+these new shared files has been verified. Processes must be started again.
+Model files, local configuration and test logs are not committed to Git.
