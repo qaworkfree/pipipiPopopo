@@ -34,9 +34,10 @@ For Windows PowerShell, follow the
 test model/configuration files outside the existing repositories.
 
 This procedure uses upstream source and a separately supplied GGUF. Real CPU
-inference, CLI responses and authenticated UI streaming now pass with the small
-model recorded below. That model did not call `read`, so tool compatibility and
-deployment on the intended host remain incomplete.
+inference, CLI responses and authenticated UI streaming pass with the small
+model recorded below. That model did not call `read`; the later Qwen3-Coder test
+did execute it successfully through the built CLI and authenticated UI. See the
+recorded outcomes below. Deployment on the intended host remains incomplete.
 
 1. Install a C++ toolchain and CMake according to the upstream
    [build guide](https://github.com/ggml-org/llama.cpp/blob/master/docs/build.md).
@@ -174,7 +175,8 @@ artifact from this fork, even if its version string matches.
   project policy, canonical escapes, denied uploads and blocked previews.
 - Real CPU GGUF inference, CLI responses and authenticated UI/browser streaming
   pass with the small model recorded below. Its read-tool test did not pass;
-  offline HTTP fixtures do not establish model tool-call compatibility.
+  the later Qwen3-Coder CLI/UI tests completed real read calls and returned a
+  random probe marker. Offline HTTP fixtures do not establish model compatibility.
 - The intended host, production model/quantization, GPU configuration and real
   Tailscale second-device validation are deployment inputs, not inferred here.
 
@@ -240,11 +242,10 @@ Observed results:
   with code 4001 and the expired cookie received HTTP 401. The test explicitly
   disabled other catalog/core tools in its disposable UI configuration.
 
-This validates the inference connection, not coding quality or tool compatibility.
-The remaining model check requires a model/template that actually emits a valid
-read call, with a successful tool result and the expected file marker. Follow the
-UI plan's pending audit of additional native SDK tools before enabling those
-tools in a policy-controlled deployment. GPU behavior, Windows execution,
+That small-model run validates the inference connection, not coding quality or
+tool compatibility. The later Qwen3-Coder run below supplies a successful real
+read call. Follow the UI plan's pending audit of additional native SDK tools
+before enabling those tools in a policy-controlled deployment. GPU behavior, Windows execution,
 production hardware/model selection and second-device Tailscale access remain
 unverified.
 
@@ -255,3 +256,66 @@ installation/startup instructions were updated in a configuration draft. Saving
 that update does not publish a new snapshot, and no fresh-task restoration of
 these new shared files has been verified. Processes must be started again.
 Model files, local configuration and test logs are not committed to Git.
+
+## Qwen research and tool-call validation: 2026-10-06
+
+The user subsequently requested research into Qwen3.8-27B Q8 and authorized
+testing Qwen3-Coder-30B-A3B. These are distinct models; the Q8 suffix describes
+quantization rather than tool permissions.
+
+| Candidate                                                                                | Model support                                                                                     | GGUF researched                                                                                                          | Observed test scope                                               |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| [Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B)                                   | Official chat template exposes function/tool-call and tool-response blocks; dense 27B, multimodal | [Unsloth Q8_0](https://huggingface.co/unsloth/Qwen3.8-27B-GGUF), 29,047,086,048 bytes (about 29 GB)                      | Metadata/template research only; not downloaded or run            |
+| [Qwen3-Coder-30B-A3B-Instruct](https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct) | Official card documents agentic coding/function calls; 30.5B total, 3.3B activated                | [Unsloth Q4_K_M](https://huggingface.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF), 18,556,689,568 bytes (about 18.6 GB) | Verified download, actual CPU CLI and authenticated UI read calls |
+
+The official Qwen3.8 metadata revision is
+`1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0`; its template includes XML
+`<tool_call>`/`<function=...>` blocks. The researched Unsloth GGUF revision is
+`4ca720788d1e01f1bff70c033e0d0028fd02e502`, file `Qwen3.8-27B-Q8_0.gguf`,
+expected SHA-256
+`a680f44a06920e5d689774823782006aa3acc8db95750323373b24139b67e348`.
+These are expected source metadata, not a local checksum or inference result.
+The file alone approaches this cloud's available disk capacity and needs
+additional memory for the context/runtime. No Qwen3.8 deployment is validated.
+
+The Coder's official card revision is
+`b2cff646eb4bb1d68355c01b18ae02e7cf42d120`. The downloaded GGUF used Unsloth
+revision `b17cb02dd882d5b6ab62fc777ad2995f19668350`, file
+`Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf`. Normal TLS, exact size and expected
+SHA-256 `fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad`
+were verified before loading. Both model cards declare Apache-2.0.
+
+The cloud provides 32 GiB RAM, a four-CPU quota and no GPU. The initial Coder load
+with default CPU weight repacking brought cgroup memory close to 32 GiB. The
+supported `--no-repack` option reduced observed consumption to about 19 GiB;
+it changes CPU optimization, not the model checksum or tool assertions. The
+validated CPU baseline used the same pinned llama.cpp build and:
+
+```sh
+build/bin/llama-server --model "$WORKFREE_GGUF" --alias workfree-local \
+  --jinja --host 127.0.0.1 --port 8099 --ctx-size 8192 --parallel 1 \
+  --n-gpu-layers 0 --threads 4 --predict 512 --no-repack
+```
+
+The isolated provider example used that port and `maxTokens: 512`. The existing
+health script passed readiness, discovery and real bounded SSE through `[DONE]`.
+The built CLI greeting passed. With only `read` enabled and extensions/skills/
+prompt templates disabled, JSON events recorded one successful
+`tool_execution_end` for `read`, the random marker in its actual result, and the
+same marker in the final assistant answer. The marker was created in a disposable
+`probe.txt` and never included in the prompt; it was not inferred from exit code.
+
+The UI then loaded the actual fork in fresh isolated agent/UI directories using
+the same provider configuration. Its Read only project preset granted the
+disposable project; all other catalog/core tools were explicitly disabled. The
+test required a fresh conversation, matched its new streamed text in mobile
+Chromium, then required a successful `read` tool result containing the random
+marker and the same marker in the final answer shown by the browser. Actual
+HTTP login/unauthenticated-session denial, WebSocket streaming and logout/socket
+revocation also passed. This completes the basic CPU model/read-tool integration
+check for this artifact, not an audit of every tool or coding workload.
+
+Tool-capable models request operations; the agent executes them and the UI's
+adapters enforce project permissions. Model support does not automatically grant
+filesystem access or validate unrelated native SDK tools. Production host/GPU,
+Windows and second-device Tailscale checks remain separate.
