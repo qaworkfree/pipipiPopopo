@@ -29,9 +29,13 @@ the same runtime configuration when they should see the same providers.
 
 ## llama.cpp/GGUF setup procedure
 
+For Windows PowerShell, follow the
+[local Windows validation guide](workfree-local-models-windows.md), which keeps
+test model/configuration files outside the existing repositories.
+
 This procedure uses upstream source and a separately supplied GGUF. It has **not
-been validated with real GGUF inference in this cloud environment**: Hugging Face
-downloads are blocked by HTTP 403 and no production GGUF was supplied. Do not
+been validated with real GGUF inference in this cloud environment**: the model
+delivery CDN is blocked by the proxy with HTTP 403. Do not
 mark deployment complete until the checks below pass on the intended host.
 
 1. Install a C++ toolchain and CMake according to the upstream
@@ -41,14 +45,16 @@ mark deployment complete until the checks below pass on the intended host.
 2. Build a CPU baseline before selecting GPU-specific options:
 
    ```sh
-   cmake -S . -B build -DGGML_CUDA=OFF -DLLAMA_CURL=OFF
+   cmake -S . -B build -DGGML_CUDA=OFF -DLLAMA_OPENSSL=OFF
    cmake --build build --config Release --target llama-server -j 4
    build/bin/llama-server --version
    ```
 
-   `LLAMA_CURL=OFF` assumes model downloads are managed separately. GPU builds and
-   Windows executable locations follow the upstream guide; this is not a claim
-   that those combinations were tested here.
+   This HTTP-only loopback baseline manages model downloads separately, with
+   normal TLS/checksum verification. For upstream v0.5.0, `LLAMA_OPENSSL=OFF`
+   disables server-side HTTPS support; the old `LLAMA_CURL` switch is deprecated.
+   Keep OpenSSL enabled when the server needs HTTPS features. GPU builds and
+   Windows executable locations follow the upstream guide.
 
 3. Obtain an instruction-tuned GGUF appropriate for the host's memory and coding
    workload. Review its license and chat/tool template. Record its immutable
@@ -59,11 +65,12 @@ mark deployment complete until the checks below pass on the intended host.
 
    ```sh
    build/bin/llama-server --model "$WORKFREE_GGUF" --alias workfree-local \
-     --jinja --host 127.0.0.1 --port 8080 --ctx-size 8192 --n-gpu-layers 0
+     --jinja --host 127.0.0.1 --port 8080 --ctx-size 8192 --parallel 1 --n-gpu-layers 0
    ```
 
    The model must support this context size. If it does not, lower both the
    server context and the example's `contextWindow`/`maxTokens` appropriately.
+   One slot keeps the configured context available to this baseline request.
    An API key, if enabled, must match `LLAMA_API_KEY` in the agent process.
 
 5. Run the deployment check from this repository:
@@ -169,3 +176,26 @@ artifact from this fork, even if its version string matches.
   offline HTTP fixtures are not a substitute for an actual model.
 - The intended host, production model/quantization, GPU configuration and real
   Tailscale second-device validation are deployment inputs, not inferred here.
+
+## Cloud follow-up: 2026-10-06
+
+The Linux CPU `llama-server` target compiled successfully from upstream v0.5.0,
+commit `7fe450e19305b828c199d602c23a8337aaa1f03b`, with CMake 4.1.3 and GCC 14.2.
+The executable's `--version` check passed. GPU and Windows builds remain unrun;
+successful compilation does not prove model inference.
+
+The public model card and immutable download metadata for
+`bartowski/Qwen2.5-Coder-0.5B-Instruct-GGUF` are accessible. The Q4_K_M file at
+revision `69a2c192eed24297fb09a34d8ba948b8624cc3e2` has expected size 397,808,288
+bytes and expected SHA-256
+`0128e77564e43d40682f82d7ebe8a9abdf0c24c8f55fa85629f8cc156b1b6560`.
+The model card declares Apache-2.0. This is a small CPU smoke-test candidate,
+not a selected production model; its tool-call behavior has not been validated.
+
+The immutable Hugging Face URL redirects to `us.aws.cdn.hf.co`. The cloud proxy
+rejects that connection with HTTP 403, so no GGUF download or inference passed.
+The missing CDN domain was added to the saved environment draft. Saving a draft
+does not publish the environment or prove live access; publication is performed
+through the environment settings UI. Verify the expected checksum after a
+successful download, before loading the model. Local-machine validation is also
+possible using the same guide and private test configuration.
