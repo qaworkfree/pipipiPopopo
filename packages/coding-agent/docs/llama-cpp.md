@@ -112,3 +112,6 @@ curl http://127.0.0.1:8080/models
 - **Server is not in router mode:** Start it without `--model`, `-m`, or `-hf`.
 
 To remove the `llama.cpp` provider and `/llama`, disable `llama.cpp` under Built-in in `pi config`, or set `"extensions": ["-builtin:llama.cpp"]` in [settings](settings.md#resources).
+
+For the Workfree UI/runtime split, deployment checks and a single-model example,
+see [Workfree local-model deployment](workfree-local-models.md).
