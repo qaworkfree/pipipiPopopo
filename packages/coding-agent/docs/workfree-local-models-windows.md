@@ -113,8 +113,16 @@ $TestRoot
 This Apache-2.0, approximately 398 MB model is a CPU smoke-test candidate. It is
 not a production recommendation or proof of coding/tool quality. The server
 baseline uses loopback HTTP; external downloads retain TLS and checksum
-verification. The cloud proxy currently blocks the download's CDN redirect;
-local network access must be checked independently.
+verification. The initial cloud proxy blocked its CDN redirect; later publication
+enabled verified downloads of other models. Check Windows network access independently.
+
+This 0.5B model remains an unvalidated tool-call candidate. Actual cloud evidence
+is different: SmolLM2-135M Q3_K_S (88 MB) passed text inference but failed the read
+tool check; Qwen3-Coder-30B-A3B Q4_K_M (18.6 GB) passed real CLI/UI read-tool calls.
+See the [verified sources, checksums and server options](workfree-local-models.md)
+before substituting a model. The Coder cloud run used about 19 GiB with CPU
+`--no-repack`; that observation does not establish Windows/GPU requirements or
+performance. A small-model text reply does not complete tool validation.
 
 Keep this PowerShell terminal running the model server:
 
@@ -193,3 +201,19 @@ Record Windows/tool versions, both Git commits, llama.cpp commit, verified GGUF
 checksum, health-check output, greeting/tool results and any failure logs. The
 second-device private HTTPS/Tailscale check is separate. Local inference does
 not validate cloud publication, GPU performance or remote deployment.
+
+## Record host and second-device deployment checks
+
+The UI repository now provides a bounded check for the already running service,
+including loaded agent version, anonymous HTTP/WS denial, password login/cookie
+attributes, actual WS snapshot delivery, cross-origin logout denial and logout
+invalidating HTTP/open WS access. Run it from the host first, then from the
+authorized second Tailscale device using its actual HTTPS URL:
+
+[PowerShell deployment-report procedure](https://github.com/qaworkfree/pi-web-ui/blob/main/docs/workfree-deployment-validation.md)
+
+Use your existing login credentials locally; the JSON report omits them. No
+agent tools/model prompts or project-setting changes are performed by that UI
+checker. Preserve the real GGUF/tool evidence above separately. Browser
+streaming, cross-device session revocation and GPU behavior still need their
+actual observations; a passing cloud/loopback report does not validate them.
