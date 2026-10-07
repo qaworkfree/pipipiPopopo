@@ -43,3 +43,17 @@ plans/
 .pi/hf-sessions-backup/
 collect.sh
 packages/agent/docs/extensions/pi-server-artifact/index.md
+
+# Private local data must never be published.
+Personal/
+personal/
+/ui-data/
+/agent-config/
+/test-project/
+/uploads/
+/attachments/
+/sessions/
+/logs/
+.env
+.env.local
+.env.*.local

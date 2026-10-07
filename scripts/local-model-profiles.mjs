@@ -6,6 +6,7 @@ import {
 	openSync,
 	readFileSync,
 	readSync,
+	realpathSync,
 	readdirSync,
 	renameSync,
 	statSync,
@@ -129,6 +130,7 @@ export function writeProfiles(path, profiles) {
 		if (!Number.isSafeInteger(model.maxTokens) || model.maxTokens < 1 || model.maxTokens >= model.contextWindow)
 			throw new Error(`Max output for ${model.name} must be smaller than its context`);
 		lines.push(`[${model.id}]`, `model = ${model.path}`, `ctx-size = ${model.contextWindow}`);
+		if (model.embedding) lines.push("embedding = true");
 		if (model.mmproj) lines.push(`mmproj = ${model.mmproj}`);
 		lines.push("");
 	}
@@ -186,6 +188,7 @@ export function prepareProfiles({ modelsDir, profilePath }) {
 				name: basename(path),
 				path,
 				...metadata,
+				...(["bert", "nomic-bert", "jina-bert-v2"].includes(metadata.architecture) ? { embedding: true } : {}),
 				contextWindow,
 				maxTokens,
 				...(projectors.length === 1 && mainFiles.length === 1 ? { mmproj: join(directory, projectors[0].name) } : {}),
@@ -211,7 +214,7 @@ export function updateProfiles(profilePath, updates) {
 	return profiles;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
 	try {
 		const [command, path, value] = process.argv.slice(2);
 		const profiles =

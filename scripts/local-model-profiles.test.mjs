@@ -23,7 +23,7 @@ function str(value) {
 	const b = Buffer.from(value);
 	return Buffer.concat([u64(b.length), b]);
 }
-function fixture(limit = 32768) {
+function fixture(limit = 32768, architecture = "qwen3") {
 	const dir = mkdtempSync(join(tmpdir(), "gguf-profiles-"));
 	dirs.push(dir);
 	const modelsDir = join(dir, "models with spaces");
@@ -42,12 +42,12 @@ function fixture(limit = 32768) {
 		u64(2),
 		str("test"),
 		str("token"),
-		str("qwen3.context_length"),
+		str(`${architecture}.context_length`),
 		u32(4),
 		u32(limit),
 		str("general.architecture"),
 		u32(8),
-		str("qwen3"),
+		str(architecture),
 	]);
 	writeFileSync(path, metadata);
 	return { dir, modelsDir, profilePath, path, metadata };
@@ -133,4 +133,12 @@ test("rejects section injection before writing files", () => {
 	const f = fixture();
 	writeFileSync(join(f.modelsDir, "bad[id].gguf"), f.metadata);
 	assert.throws(() => prepareProfiles(f), /INI/);
+});
+
+test("enables embeddings for encoder GGUFs without treating them as chat models", () => {
+	const f = fixture(2048, "nomic-bert");
+	const profiles = prepareProfiles(f);
+	assert.equal(profiles.models[0].embedding, true);
+	assert.equal(profiles.models[0].contextWindow, 2048);
+	assert.match(readFileSync(profiles.presetPath, "utf8"), /embedding = true/);
 });
