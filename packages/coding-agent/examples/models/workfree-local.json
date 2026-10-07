@@ -7,7 +7,6 @@
 			"models": [
 				{
 					"id": "workfree-local",
-					"name": "Workfree local GGUF",
 					"reasoning": false,
 					"input": ["text"],
 					"contextWindow": 8192,
