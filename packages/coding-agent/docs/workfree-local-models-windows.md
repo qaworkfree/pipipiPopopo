@@ -10,10 +10,18 @@ OS sandboxing outside this test.
 
 For normal use, the UI repository's
 [visible router launcher](https://github.com/qaworkfree/pi-web-ui/blob/main/docs/local-model-deployment.md#visible-launcher-and-all-local-models)
-starts existing builds with all usable GGUFs in `D:\IA\modelos-llamacpp` listed.
+prepares/reuses builds with usable GGUFs in `D:\IA\modelos-llamacpp` listed.
 It keeps llama.cpp and UI consoles open and performs readiness GET requests only.
 Opening/selecting models sends no prompt and loads no weights; a chat message
-triggers autoload. Update/build both repositories before using the new launcher.
+triggers autoload. Update both repositories and double-click `Start-Workfree.cmd`
+inside `pi-web-ui`. It stops listeners on its configured ports before starting
+services and keeps both consoles visible. Existing models and credentials are
+preserved; missing executable/checkout paths are requested once and saved privately.
+The runtime's `scripts/local-model-profiles.mjs` reads each GGUF's architecture
+and `context_length` metadata without loading tensors. UI Context/Max output
+controls select independent bounded settings, persisted into router INI presets;
+there is no global context override. Initial context is at most 4096 tokens.
+See the linked UI guide for preparation, configuration and validation limits.
 The procedures below are **optional manual validation**, not startup tasks.
 Never add greeting/read/capability tests to a launcher or run them on UI opening.
 
