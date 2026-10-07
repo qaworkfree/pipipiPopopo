@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import { pathToFileURL } from "node:url";
 
-/** Check readiness, catalog selection and actual streaming inference without storing credentials. */
+/** Check readiness and catalog without inference unless explicitly requested. */
 export async function checkLocalModel({
 	baseUrl = process.env.LLAMA_BASE_URL || "http://127.0.0.1:8080",
 	apiKey = process.env.LLAMA_API_KEY,
 	model = process.env.LLAMA_MODEL,
 	timeoutMs = 60_000,
+	inference = false,
 } = {}) {
 	const base = new URL(baseUrl);
 	if (!["http:", "https:"].includes(base.protocol) || base.username || base.password || base.search || base.hash)
@@ -39,6 +40,7 @@ export async function checkLocalModel({
 	if (!ids.length) throw new Error("No models are available; load a GGUF model first");
 	const selected = model || ids[0];
 	if (!ids.includes(selected)) throw new Error("The requested LLAMA_MODEL is absent from the model catalog");
+	if (!inference) return { model: selected, availableModels: ids.length, streamedCharacters: 0 };
 	const response = await request("/v1/chat/completions", "Streaming inference", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
@@ -101,9 +103,11 @@ export async function checkLocalModel({
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
 	try {
-		const result = await checkLocalModel();
+		if (process.argv.slice(2).some((arg) => arg !== "--inference")) throw new Error("Only --inference is supported");
+		const inference = process.argv.includes("--inference");
+		const result = await checkLocalModel({ inference });
 		console.log(
-			`PASS: local model ${result.model}; readiness, catalog and streaming inference (${result.streamedCharacters} characters)`,
+			`PASS: local model ${result.model}; readiness and catalog${inference ? `; streaming inference (${result.streamedCharacters} characters)` : "; no prompt sent"}`,
 		);
 	} catch (error) {
 		// Never print upstream response bodies, URLs or credentials.

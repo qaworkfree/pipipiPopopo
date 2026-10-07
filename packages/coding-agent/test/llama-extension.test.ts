@@ -281,7 +281,7 @@ describe("llama.cpp extension", () => {
 		expect(storedContextWindows()).toEqual([32768, 32768]);
 	});
 
-	it("exposes unloaded presets only when router autoload is enabled", async () => {
+	it("exposes unloaded presets and directory models only when router autoload is enabled", async () => {
 		let propsRequests = 0;
 		const { url } = await listen((request, response) => {
 			expect(request.headers.authorization).toBe("Bearer local");
@@ -321,10 +321,12 @@ describe("llama.cpp extension", () => {
 		});
 
 		expect(propsRequests).toBe(1);
-		expect(controller.provider.getModels().map((model) => model.id)).toEqual(["preset"]);
+		expect(controller.provider.getModels().map((model) => model.id)).toEqual(["preset", "models-dir"]);
 		expect(cachedEntry?.models.map((model) => [model.id, model.api])).toEqual([
 			["preset", "openai-completions"],
+			["models-dir", "openai-completions"],
 			["preset", "llama-cpp-classify"],
+			["models-dir", "llama-cpp-classify"],
 		]);
 	});
 

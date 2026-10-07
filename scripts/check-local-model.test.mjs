@@ -61,7 +61,7 @@ async function fixture(run, options = {}) {
 
 test("checks readiness, selects a catalog model and consumes complete UTF-8 streaming inference", async () => {
 	await fixture(async ({ baseUrl, requests }) => {
-		const result = await checkLocalModel({ baseUrl: `${baseUrl}/v1/`, apiKey: "test-secret" });
+		const result = await checkLocalModel({ baseUrl: `${baseUrl}/v1/`, apiKey: "test-secret", inference: true });
 		assert.deepEqual(result, { model: "test-gguf", availableModels: 1, streamedCharacters: 3 });
 		assert.deepEqual(
 			requests.map((row) => row.path),
@@ -82,13 +82,21 @@ for (const [name, options, expected] of [
 ])
 	test(`rejects ${name}`, async () => {
 		await fixture(async ({ baseUrl }) => {
-			await assert.rejects(checkLocalModel({ baseUrl, timeoutMs: options.hang ? 100 : 3000 }), expected);
+			await assert.rejects(checkLocalModel({ baseUrl, inference: true, timeoutMs: options.hang ? 100 : 3000 }), expected);
 		}, options);
 	});
 test("fails for an unknown requested model before sending inference", async () => {
 	await fixture(async ({ baseUrl, requests }) => {
 		await assert.rejects(checkLocalModel({ baseUrl, model: "missing" }), /absent/);
 		assert.equal(requests.length, 2);
+	});
+});
+test("default readiness check sends no prompt or tool request", async () => {
+	await fixture(async ({ baseUrl, requests }) => {
+		assert.deepEqual(await checkLocalModel({ baseUrl }), {
+			model: "test-gguf", availableModels: 1, streamedCharacters: 0,
+		});
+		assert.deepEqual(requests.map((request) => request.path), ["/health", "/v1/models"]);
 	});
 });
 test("rejects embedded credentials and invalid deadlines", async () => {

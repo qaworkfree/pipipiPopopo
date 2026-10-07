@@ -38,8 +38,13 @@ function modelIsSelectable(model: LlamaModelInfo, routerAutoload: boolean): bool
 	if (model.status.value === "loaded") return true;
 	// llama.cpp reports idle-slept models as "sleeping"; requests wake them automatically.
 	if (model.status.value === "sleeping") return true;
-	// Unloaded presets are routable only when llama.cpp router autoload can load them on first use.
-	return routerAutoload && model.status.value === "unloaded" && !model.status.failed && model.source === "preset";
+	// Both preset and --models-dir entries autoload on first inference.
+	return (
+		routerAutoload &&
+		model.status.value === "unloaded" &&
+		!model.status.failed &&
+		(model.source === "preset" || model.source === "models_dir")
+	);
 }
 
 async function routerAutoloadEnabled(
@@ -47,7 +52,12 @@ async function routerAutoloadEnabled(
 	catalog: readonly LlamaModelInfo[],
 	signal: AbortSignal,
 ): Promise<boolean> {
-	if (!catalog.some((model) => model.status.value === "unloaded" && model.source === "preset")) return false;
+	if (
+		!catalog.some(
+			(model) => model.status.value === "unloaded" && (model.source === "preset" || model.source === "models_dir"),
+		)
+	)
+		return false;
 	try {
 		return (await client.props({ signal })).models_autoload === true;
 	} catch {
@@ -76,6 +86,16 @@ function contextWindowOf(model: LlamaModelInfo, cachedContextWindow?: number): n
 	return trainingContextWindow && trainingContextWindow > 0 ? trainingContextWindow : 128000;
 }
 
+function modelDisplayName(model: LlamaModelInfo): string {
+	const args = model.status.args ?? [];
+	for (let index = 0; index < args.length - 1; index++) {
+		if (args[index] !== "--model" && args[index] !== "-m") continue;
+		const filename = args[index + 1]?.split(/[\\/]/).pop();
+		if (filename && /\.gguf$/i.test(filename) && !/[\x00-\x1f\x7f]/.test(filename)) return filename;
+	}
+	return model.id;
+}
+
 /** The same llama.cpp model used as a classifier: answers are read from next-token label probabilities. */
 function toPiClassifierModel(
 	model: LlamaModelInfo,
@@ -85,7 +105,7 @@ function toPiClassifierModel(
 	return {
 		type: "classifier",
 		id: model.id,
-		name: model.id,
+		name: modelDisplayName(model),
 		api: "llama-cpp-classify",
 		provider: LLAMA_PROVIDER_ID,
 		baseUrl: serverUrl,
@@ -105,7 +125,7 @@ function toPiModel(
 	const reasoning = props?.chat_template?.includes("enable_thinking") === true;
 	return {
 		id: model.id,
-		name: model.id,
+		name: modelDisplayName(model),
 		api: "openai-completions",
 		provider: LLAMA_PROVIDER_ID,
 		baseUrl: llamaInferenceUrl(serverUrl),
@@ -229,7 +249,7 @@ export function createLlamaProvider(): LlamaProviderController {
 			const serverUrl = credentialServerUrl(context.credential);
 			if (!serverUrl) return;
 			const client = new LlamaClient(serverUrl, context.credential.key);
-			const catalog = await client.list({ signal: context.signal });
+			const catalog = await client.list({ reload: context.force === true, signal: context.signal });
 			if (context.signal.aborted) return;
 			const routerAutoload = await routerAutoloadEnabled(client, catalog, context.signal);
 			if (context.signal.aborted) return;

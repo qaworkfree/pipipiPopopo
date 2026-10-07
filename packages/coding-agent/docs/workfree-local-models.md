@@ -81,10 +81,13 @@ recorded outcomes below. Deployment on the intended host remains incomplete.
      node scripts/check-local-model.mjs
    ```
 
-   The check calls `/health`, verifies the selected model in `/v1/models`, then
+   By default the check calls `/health` and `/v1/models` only. It sends no prompt
+   and is safe as a passive pre-start check. Explicitly add `--inference` to
+   validate streaming; never add that flag to automatic startup. Inference then
    requests at most 32 output tokens and consumes SSE through `[DONE]`. It fails
    on readiness errors, missing models, HTTP errors, invalid/incomplete streaming
-   or timeout. It does not load/unload models or store/print credentials.
+   or timeout. An inference request can autoload a router model. The check does
+   not call explicit model load/unload endpoints or store/print credentials.
    API keys come from `LLAMA_API_KEY`; never put a key in a URL or CLI argument.
 
 6. Start Pi with the example provider and perform a harmless prompt, then test a

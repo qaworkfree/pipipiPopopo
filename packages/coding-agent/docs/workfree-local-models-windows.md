@@ -8,6 +8,15 @@ OS sandboxing outside this test.
 
 ## Prerequisites and existing repositories
 
+For normal use, the UI repository's
+[visible router launcher](https://github.com/qaworkfree/pi-web-ui/blob/main/docs/local-model-deployment.md#visible-launcher-and-all-local-models)
+starts existing builds with all usable GGUFs in `D:\IA\modelos-llamacpp` listed.
+It keeps llama.cpp and UI consoles open and performs readiness GET requests only.
+Opening/selecting models sends no prompt and loads no weights; a chat message
+triggers autoload. Update/build both repositories before using the new launcher.
+The procedures below are **optional manual validation**, not startup tasks.
+Never add greeting/read/capability tests to a launcher or run them on UI opening.
+
 Install Node >=22.19, Git, CMake and Visual Studio 2022 Build Tools with the
 Desktop development with C++ workload, MSVC x64 tools and Windows SDK. The cloud
 CPU build used CMake 4.1.3. Use native `npm.cmd` and `curl.exe` rather than
@@ -196,7 +205,7 @@ $ModelConfig.providers.'workfree-local'.models[0] |
 Set-Content -LiteralPath (Join-Path $TestProject 'probe.txt') -Value 'WORKFREE_READ_PROBE_7421' -Encoding ASCII
 $env:LLAMA_BASE_URL = 'http://127.0.0.1:8080'
 $env:LLAMA_MODEL = 'workfree-local'
-Invoke-Checked node @((Join-Path $env:PI_RUNTIME_REPO 'scripts\check-local-model.mjs'))
+Invoke-Checked node @((Join-Path $env:PI_RUNTIME_REPO 'scripts\check-local-model.mjs'), '--inference')
 
 $PiCli = Join-Path $env:PI_RUNTIME_REPO 'packages\coding-agent\dist\bundle\cli.js'
 Invoke-Checked node @($PiCli, '--list-models', 'workfree-local')
