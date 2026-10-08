@@ -57,3 +57,13 @@ personal/
 .env
 .env.local
 .env.*.local
+# Private local data must never be published (defense in depth; the real data
+# lives outside this repo under D:\pipipiPopopo\Personal).
+Personal/
+personal/
+ui-data/
+agent-config/
+test-project/
+uploads/
+attachments/
+sessions/
