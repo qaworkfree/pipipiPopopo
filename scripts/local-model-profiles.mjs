@@ -111,11 +111,56 @@ function writeAtomic(path, value) {
 	renameSync(temp, path);
 }
 
+const KV_CACHE_TYPES = new Set(["f32", "f16", "bf16", "q8_0", "q5_1", "q5_0", "q4_1", "q4_0"]);
+
+/**
+ * Validate a per-model GPU offload block and return the INI lines it maps to.
+ * Optional and per model on purpose: a global --n-gpu-layers would also apply
+ * to models whose saved context makes the GPU KV cache exceed VRAM (load
+ * failure), so offload stays an explicit per-model profile choice.
+ */
+function gpuPresetLines(name, gpu) {
+	if (gpu === undefined) return [];
+	if (typeof gpu !== "object" || gpu === null || Array.isArray(gpu))
+		throw new Error(`GPU settings for ${name} must be an object`);
+	const lines = [];
+	const { layers, cpuMoe, flashAttn, cacheTypeK, cacheTypeV } = gpu;
+	if (layers !== undefined) {
+		if (!Number.isSafeInteger(layers) || layers < 0 || layers > 999)
+			throw new Error(`GPU layers for ${name} must be an integer between 0 and 999`);
+		lines.push(`n-gpu-layers = ${layers}`);
+	}
+	if (cpuMoe === true) lines.push("cpu-moe = true");
+	else if (cpuMoe !== undefined) {
+		if (!Number.isSafeInteger(cpuMoe) || cpuMoe < 0 || cpuMoe > 999)
+			throw new Error(`cpuMoe for ${name} must be true or an integer between 0 and 999`);
+		if (cpuMoe > 0) lines.push(`n-cpu-moe = ${cpuMoe}`);
+	}
+	if (flashAttn !== undefined) {
+		if (!["on", "off", "auto"].includes(flashAttn))
+			throw new Error(`flashAttn for ${name} must be "on", "off" or "auto"`);
+		lines.push(`flash-attn = ${flashAttn}`);
+	}
+	for (const [key, value] of [
+		["cache-type-k", cacheTypeK],
+		["cache-type-v", cacheTypeV],
+	]) {
+		if (value === undefined) continue;
+		if (!KV_CACHE_TYPES.has(value)) throw new Error(`${key} for ${name} must be one of ${[...KV_CACHE_TYPES]}`);
+		lines.push(`${key} = ${value}`);
+	}
+	return lines;
+}
+
 export function writeProfiles(path, profiles) {
 	const lines = [
 		"# Generated from verified GGUF metadata. Edit context/output in pi-web-ui.",
 		"[*]",
 		"ctx-size = 4096",
+		// CPU by default for every model; a per-model gpu block overrides it in its
+		// own section. The launcher must NOT pass a global --n-gpu-layers: router
+		// CLI flags outrank preset sections and would pin every model to that value.
+		"n-gpu-layers = 0",
 		"",
 	];
 	for (const model of profiles.models) {
@@ -132,6 +177,7 @@ export function writeProfiles(path, profiles) {
 		lines.push(`[${model.id}]`, `model = ${model.path}`, `ctx-size = ${model.contextWindow}`);
 		if (model.embedding) lines.push("embedding = true");
 		if (model.mmproj) lines.push(`mmproj = ${model.mmproj}`);
+		lines.push(...gpuPresetLines(model.name, model.gpu));
 		lines.push("");
 	}
 	writeAtomic(profiles.presetPath, lines.join("\n"));
@@ -191,6 +237,8 @@ export function prepareProfiles({ modelsDir, profilePath }) {
 				...(["bert", "nomic-bert", "jina-bert-v2"].includes(metadata.architecture) ? { embedding: true } : {}),
 				contextWindow,
 				maxTokens,
+				// Per-model GPU offload survives rescans (writeProfiles validates it).
+				...(old?.gpu !== undefined ? { gpu: old.gpu } : {}),
 				...(projectors.length === 1 && mainFiles.length === 1 ? { mmproj: join(directory, projectors[0].name) } : {}),
 			});
 		}
@@ -209,6 +257,8 @@ export function updateProfiles(profilePath, updates) {
 		if (!model) throw new Error("Unknown local model ID");
 		if (update.contextWindow !== undefined) model.contextWindow = update.contextWindow;
 		if (update.maxTokens !== undefined) model.maxTokens = update.maxTokens;
+		if (update.gpu === null) delete model.gpu;
+		else if (update.gpu !== undefined) model.gpu = update.gpu;
 	}
 	writeProfiles(profilePath, profiles);
 	return profiles;
