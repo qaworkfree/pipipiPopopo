@@ -12,7 +12,7 @@ import {
 	statSync,
 	writeFileSync,
 } from "node:fs";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 /** Read GGUF metadata without allocating tensors or loading model weights. */
@@ -184,6 +184,13 @@ export function writeProfiles(path, profiles) {
 	writeAtomic(path, `${JSON.stringify(profiles, null, 2)}\n`);
 }
 
+function validProjector(path, modelsDir) {
+	if (typeof path !== "string" || !/^mmproj.*\.gguf$/i.test(basename(path))) return false;
+	const full = resolve(path);
+	const rel = relative(resolve(modelsDir), full);
+	return !rel.startsWith("..") && !isAbsolute(rel) && existsSync(full);
+}
+
 export function prepareProfiles({ modelsDir, profilePath }) {
 	modelsDir = resolve(modelsDir);
 	profilePath = resolve(profilePath);
@@ -239,7 +246,13 @@ export function prepareProfiles({ modelsDir, profilePath }) {
 				maxTokens,
 				// Per-model GPU offload survives rescans (writeProfiles validates it).
 				...(old?.gpu !== undefined ? { gpu: old.gpu } : {}),
-				...(projectors.length === 1 && mainFiles.length === 1 ? { mmproj: join(directory, projectors[0].name) } : {}),
+				// A projector chosen explicitly (flat model folders hold several, so
+				// auto-detection cannot pick one) survives rescans while it still exists.
+				...(validProjector(old?.mmproj, modelsDir)
+					? { mmproj: old.mmproj }
+					: projectors.length === 1 && mainFiles.length === 1
+						? { mmproj: join(directory, projectors[0].name) }
+						: {}),
 			});
 		}
 	};
@@ -259,6 +272,12 @@ export function updateProfiles(profilePath, updates) {
 		if (update.maxTokens !== undefined) model.maxTokens = update.maxTokens;
 		if (update.gpu === null) delete model.gpu;
 		else if (update.gpu !== undefined) model.gpu = update.gpu;
+		if (update.mmproj === null) delete model.mmproj;
+		else if (update.mmproj !== undefined) {
+			if (!validProjector(update.mmproj, profiles.modelsDir))
+				throw new Error(`mmproj for ${model.name} must be an existing mmproj*.gguf inside the models directory`);
+			model.mmproj = resolve(update.mmproj);
+		}
 	}
 	writeProfiles(profilePath, profiles);
 	return profiles;

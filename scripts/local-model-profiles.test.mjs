@@ -129,6 +129,34 @@ test("does not guess a projector pairing when a folder has multiple main models"
 	for (const name of ["Other.gguf", "mmproj.gguf"]) writeFileSync(join(f.modelsDir, name), f.metadata);
 	assert(prepareProfiles(f).models.every((model) => model.mmproj === undefined));
 });
+test("keeps an explicitly chosen projector in a flat folder through rescans", () => {
+	const f = fixture();
+	for (const name of ["Other.gguf", "mmproj-a.gguf", "mmproj-b.gguf"]) writeFileSync(join(f.modelsDir, name), f.metadata);
+	prepareProfiles(f);
+	const chosen = join(f.modelsDir, "mmproj-b.gguf");
+	updateProfiles(f.profilePath, [{ id: "Qwen-Q4_K_M", mmproj: chosen }]);
+	const rescanned = prepareProfiles(f);
+	assert.equal(rescanned.models.find((m) => m.id === "Qwen-Q4_K_M").mmproj, chosen);
+	assert.equal(rescanned.models.find((m) => m.id === "Other").mmproj, undefined);
+	assert.match(readFileSync(rescanned.presetPath, "utf8"), /mmproj = .*mmproj-b\.gguf/);
+	// Removing it is persisted; a deleted projector file is dropped on rescan.
+	updateProfiles(f.profilePath, [{ id: "Qwen-Q4_K_M", mmproj: null }]);
+	assert.equal(prepareProfiles(f).models.find((m) => m.id === "Qwen-Q4_K_M").mmproj, undefined);
+	updateProfiles(f.profilePath, [{ id: "Qwen-Q4_K_M", mmproj: chosen }]);
+	rmSync(chosen);
+	assert.equal(prepareProfiles(f).models.find((m) => m.id === "Qwen-Q4_K_M").mmproj, undefined);
+});
+
+test("rejects projectors that are missing, misnamed or outside the models folder", () => {
+	const f = fixture();
+	prepareProfiles(f);
+	const outside = join(f.dir, "mmproj-outside.gguf");
+	writeFileSync(outside, f.metadata);
+	writeFileSync(join(f.modelsDir, "not-a-projector.gguf"), f.metadata);
+	for (const mmproj of [outside, join(f.modelsDir, "mmproj-missing.gguf"), join(f.modelsDir, "not-a-projector.gguf")])
+		assert.throws(() => updateProfiles(f.profilePath, [{ id: "Qwen-Q4_K_M", mmproj }]), /mmproj for/);
+});
+
 test("rejects section injection before writing files", () => {
 	const f = fixture();
 	writeFileSync(join(f.modelsDir, "bad[id].gguf"), f.metadata);
