@@ -5,6 +5,7 @@
 ### Fixed
 
 - Fixed OAuth credentials being invalidated when a request or model refresh was cancelled or superseded during a token refresh: a token refresh that has started now completes and persists the rotated refresh token
+- Fixed `build:offline` failing after `hydrate:model-data` when models.dev lists Gemini models under OpenCode Go: the generator now skips `@ai-sdk/google` models for the Go variant, whose provider does not accept the `google-generative-ai` API
 
 ## [1.0.2] - 2026-10-04
 

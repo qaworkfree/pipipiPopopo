@@ -2243,6 +2243,12 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 				if (m.status === "deprecated") continue;
 
 				const npm = m.provider?.npm;
+				// opencode-go.ts only accepts anthropic-messages/openai-completions/
+				// openai-responses. models.dev started listing Gemini models under the
+				// Go variant (@ai-sdk/google → google-generative-ai), which makes the
+				// hydrated data fail tsc against that provider's API union. Skip them
+				// for Go until the provider grows google-generative-ai support.
+				if (variant.provider === "opencode-go" && npm === "@ai-sdk/google") continue;
 				let api: Api;
 				let baseUrl: string;
 				let compat: OpenAICompletionsCompat | OpenAIResponsesCompat | undefined;
